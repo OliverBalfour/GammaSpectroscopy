@@ -41,8 +41,8 @@ def plot_titles (title="", xlabel="", ylabel=""):
 def plot_peaks (spes, energy_levels):
   plt.yscale("log")
   for energy_level in energy_levels:
-    plt.plot(np.arange(len(spes)), [spe["peak"][energy_level][1][0] for spe in spes], label=energy_level)
-  plt.legend()
+    plt.scatter(np.arange(len(spes)), [spe["peak"][energy_level][1][0] for spe in spes], label=energy_level)
+  plt.legend(loc=9, prop={'size':6})
   plt.show()
 
 def peak_channel (spe, minch, maxch):
@@ -51,6 +51,7 @@ def peak_channel (spe, minch, maxch):
   Peak = \sum_{i=a}^b \frac{x_i n_i}{n_i}
   """
   # TODO: np.dot(np.arange, counts[minch:maxch])
+  # TODO: account for Compton background
   return (sum([i * spe["counts"][i] for i in range(minch,maxch+1)])
         / sum([    spe["counts"][i] for i in range(minch,maxch+1)]))
 
@@ -240,12 +241,12 @@ def main():
   spes = calculate_peaks(load_spes())
   series = calculate_attenuation_coeffs(spes)
 
-  # Graph specific normalised spe files
-  plot_channel(spes["152EuCu3"])
-  plot_titles(
-    "$^{152} Eu$ $\gamma$-ray spectrum",
-    "Detector channel number (1-4096)", "Counts per second"
-  ) ; plt.show()
+  # # Graph specific normalised spe files
+  # plot_channel(spes["152EuCu3"])
+  # plot_titles(
+  #   "$^{152} Eu$ $\gamma$-ray spectrum",
+  #   "Detector channel number (1-4096)", "Counts per second"
+  # ) ; plt.show()
 
   # # Display calculated peak positions
   # last_nuclide = None

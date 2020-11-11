@@ -23,7 +23,8 @@ def normalise_counts (spe):
   """Normalise counts to be per unit (alive) time. Allows comparison."""
   return { **spe, "counts": spe["counts"] / spe["alive_time"] }
 
-def subtract_background_and_normalise (background):
+background = normalise_counts(parse_spe("Background.spe"))
+def subtract_background_and_normalise ():
   """Subtract normalised background counts and normalise to cnt/unit time."""
   def inner(spe):
     new_spe = normalise_counts(spe)
@@ -40,7 +41,8 @@ def plot_titles (title="", xlabel="", ylabel=""):
 def plot_peaks (spes, energy_levels):
   plt.yscale("log")
   for energy_level in energy_levels:
-    plt.plot(np.arange(len(spes)), [spe["peak"][energy_level][1][0] for spe in spes])
+    plt.plot(np.arange(len(spes)), [spe["peak"][energy_level][1][0] for spe in spes], label=energy_level)
+  plt.legend()
   plt.show()
 
 def peak_channel (spe, minch, maxch):
@@ -63,9 +65,11 @@ def peak_area (spe, a, b):
   """
   s = spe["counts"]
   gross_sum = np.sum(s[a:b+1])
-  area = gross_sum - (s[a]+s[b]) * (b-a) / 2
+  sa = (s[a]+s[a-1]+s[a+1])/3
+  sb = (s[b]+s[b-1]+s[b+1])/3
+  area = gross_sum - (sa+sb) * (b-a) / 2
   # we've normalised the data; unc is only valid for gross data hence the \div sqrt(t)
-  unc = math.sqrt(gross_sum + (s[a]+s[b]) * (b-a)**2 / 4) / math.sqrt(spe['alive_time'])
+  unc = math.sqrt(gross_sum + (sa+sb) * (b-a)**2 / 4 + math.sqrt(np.sum(background['counts'][a:b+1]))/background['alive_time']*math.sqrt(spe['alive_time'])) / math.sqrt(spe['alive_time'])
   return (area, unc)
 
 def smooth(spe):
@@ -77,8 +81,7 @@ def load_spes():
   Creates a filename-indexed dictionary of normalised spectrum dictionaries.
   Also adds filename :: String, absorber :: (String, Int), nuclide :: String fields.
   """
-  background = normalise_counts(parse_spe("Background.spe"))
-  normalise = subtract_background_and_normalise(background)
+  normalise = subtract_background_and_normalise()
   filenames = [
     "152Eu",
     "152EuAl1",
@@ -119,9 +122,9 @@ def calculate_peaks(spes):
       # "39.9100 +/- 0.0500 keV": (25, 75),
       "121.7830+/-0.0020 keV": (150, 180),
       "244.6920+/-0.0020 keV": (315, 340),
-      "344.2760+/-0.0040 keV": (450, 475),
-      "411.1150+/-0.0050 keV": (540, 570),
-      "443.9760+/-0.0050 keV": (580, 610),
+      "344.2760+/-0.0040 keV": (440, 490),
+      # "411.1150+/-0.0050 keV": (530, 570),
+      "443.9760+/-0.0050 keV": (580, 620),
       "778.9030+/-0.0060 keV": (1020, 1070),
       # "867.3880+/-0.0080 keV": (1140, 1180),
       "1112.1160+/-0.0170 keV": (1270, 1320),
@@ -237,12 +240,12 @@ def main():
   spes = calculate_peaks(load_spes())
   series = calculate_attenuation_coeffs(spes)
 
-  # # Graph specific normalised spe files
-  # plot_channel(spes["152Eu"], fact=1)
-  # plot_titles(
-  #   "$^{152} Eu$ $\gamma$-ray spectrum",
-  #   "Detector channel number (1-4096)", "Counts per second"
-  # ) ; plt.show()
+  # Graph specific normalised spe files
+  plot_channel(spes["152EuCu3"])
+  plot_titles(
+    "$^{152} Eu$ $\gamma$-ray spectrum",
+    "Detector channel number (1-4096)", "Counts per second"
+  ) ; plt.show()
 
   # # Display calculated peak positions
   # last_nuclide = None
@@ -263,7 +266,7 @@ def main():
   #   nuclide = data["nuclide"]
   #   absorber = data["absorber"]
   #   plot_titles(
-  #     f"{nuclide} $\gamma$-ray peak areas with {absorber} absorber (each line is a different energy level)",
+  #     f"{nuclide} $\gamma$-ray peak areas with {absorber} absorber",
   #     "No. layers of absorbers", "Counts per second"
   #   )
   #   plot_peaks(data["spes"], data["energy_levels"])
@@ -288,7 +291,7 @@ def main():
     # now energy_levels and coeffs have type [(value, unc)] so we can plot them
     mapFst = lambda xs: [x[0] for x in xs]
     mapSnd = lambda xs: [x[1] for x in xs]
-    plt.plot(mapFst(energy_levels), mapFst(coeffs))
+    plt.plot(mapFst(energy_levels), mapFst(coeffs), 'bo')
     plt.errorbar(
       mapFst(energy_levels), mapFst(coeffs),
       xerr=mapSnd(energy_levels),
@@ -298,7 +301,7 @@ def main():
     # plot the literature values for reference
     # shape is (n, 2); type is [[keV, cm^-1]]
     literature = np.genfromtxt(fname=f"{data['absorber']}XCOM.tsv", delimiter="\t")
-    plt.plot(literature[:,0], literature[:,1], 'y--')
+    plt.plot(literature[:,0], literature[:,1], 'yo')
     if data['absorber'] == 'Cu':
       plt.ylim(0, 3)
     elif data['absorber'] == 'Al':
@@ -307,5 +310,31 @@ def main():
       f"Linear attenuation vs photon energy level for {data['absorber']}",
       "Energy level ($keV$)", "Linear attenuation coefficient ($cm^{-1}$)"
     ) ; plt.show()
+
+  # # Save all graphs
+  # for filename in spes:
+  #   fig = plt.figure()
+  #   plot_channel(spes[filename])
+  #   nuclide = "$^{152} Eu$" if spes[filename]['nuclide'] == "152Eu" else "$^{60} Co$"
+  #   absorbers = spes[filename]['absorber']
+  #   if absorbers:
+  #     s = "s" if absorbers[1]>1 else ""
+  #     absorber_name = {"Pl": "plastic", "Cu": "copper", "Al": "aluminium"}[absorbers[0]]
+  #     absorbers = str(absorbers[1]) + f" layer{s} of " + absorber_name
+  #   else: absorbers = "no absorbers"
+  #   plot_titles(
+  #     nuclide + " $\gamma$-ray spectrum with " + absorbers,
+  #     "Detector channel number", "Counts per second"
+  #   ) ; plt.xlim(0, 2000)
+  #   plt.savefig('./spectra/'+filename+'_spectra.png')
+  #   plt.close(fig)
+  # plt.show()
+  #
+  # # Graph background
+  # plot_channel(normalise_counts(parse_spe("Background.spe")))
+  # plot_titles(
+  #   "Background radiation",
+  #   "Detector channel number (1-4096)", "Counts per second"
+  # ) ; plt.show()
 
 main()

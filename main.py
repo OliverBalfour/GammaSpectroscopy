@@ -45,15 +45,16 @@ def plot_peaks (spes, energy_levels):
   plt.legend(loc=9, prop={'size':6})
   plt.show()
 
-def peak_channel (spe, minch, maxch):
+def peak_channel (spe, a, b):
   """
   Find exact peak between min and max channel if background subtracted.
-  Peak = \sum_{i=a}^b \frac{x_i n_i}{n_i}
+  Peak = \frac{\sum_{i=a}^b x_i n_i}{\sum_{i=a}^b n_i}
   """
-  # TODO: np.dot(np.arange, counts[minch:maxch])
-  # TODO: account for Compton background
-  return (sum([i * spe["counts"][i] for i in range(minch,maxch+1)])
-        / sum([    spe["counts"][i] for i in range(minch,maxch+1)]))
+  s = spe["counts"]
+  sa = (s[a]+s[a-1]+s[a+1])/3
+  sb = (s[b+1]+s[b]+s[b+2])/3
+  counts = s[a:b+1] - np.linspace(sa, sb, num=(b+1-a))
+  return np.sum(np.dot(np.arange(a, b+1), counts)) / np.sum(counts)
 
 def peak_area (spe, a, b):
   """
@@ -67,7 +68,7 @@ def peak_area (spe, a, b):
   s = spe["counts"]
   gross_sum = np.sum(s[a:b+1])
   sa = (s[a]+s[a-1]+s[a+1])/3
-  sb = (s[b]+s[b-1]+s[b+1])/3
+  sb = (s[b+1]+s[b]+s[b+2])/3
   area = gross_sum - (sa+sb) * (b-a) / 2
   # we've normalised the data; unc is only valid for gross data hence the \div sqrt(t)
   unc = math.sqrt(gross_sum + (sa+sb) * (b-a)**2 / 4 + math.sqrt(np.sum(background['counts'][a:b+1]))/background['alive_time']*math.sqrt(spe['alive_time'])) / math.sqrt(spe['alive_time'])
@@ -116,8 +117,8 @@ def calculate_peaks(spes):
   # Min & max channels for each sample and energy level, by graph inspection
   channel_bounds = {
     "60Co": {
-      "1.17MeV": (1530, 1605),
-      "1.33MeV": (1730, 1810),
+      "1.17MeV": (1520, 1605),
+      "1.33MeV": (1740, 1810),
     },
     "152Eu": {
       # "39.9100 +/- 0.0500 keV": (25, 75),
